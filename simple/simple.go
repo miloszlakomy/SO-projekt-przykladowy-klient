@@ -10,7 +10,7 @@ import "path/filepath"
 import "encoding/json"
 import "os"
 
-var statePath = flag.String("state", "", "")
+var StatePath = flag.String("state", "", "")
 
 var _ = fmt.Printf
 
@@ -70,10 +70,10 @@ func NewSimple() *Simple {
 		Game: &comm.Game{Srv: s},
 		Men:  make(map[int]*ManStatus),
 	}
-	if *statePath == "" {
+	if *StatePath == "" {
 		return simp
 	}
-	file, err := os.Open(*statePath)
+	file, err := os.Open(*StatePath)
 	if err != nil {
 		log.Printf("Can't open state file: %s", err.Error())
 		return simp
@@ -89,10 +89,10 @@ func NewSimple() *Simple {
 }
 
 func (simp* Simple) saveState() {
-	if *statePath == "" {
+	if *StatePath == "" {
 		return
 	}
-	file, err := ioutil.TempFile(filepath.Dir(*statePath), filepath.Base(*statePath))
+	file, err := ioutil.TempFile(filepath.Dir(*StatePath), filepath.Base(*StatePath))
 	if err != nil {
 		log.Printf("Cannot create a temp file: %s", err.Error())
 		return
@@ -109,7 +109,7 @@ func (simp* Simple) saveState() {
 		return
 	}
 
-	if err := os.Rename(file.Name(), *statePath); err != nil {
+	if err := os.Rename(file.Name(), *StatePath); err != nil {
 		log.Printf("Error overwriting old serialized file: %s", err.Error())
 	}
 }
@@ -126,6 +126,12 @@ func (simp *Simple) Loop() {
 
 func (simp *Simple) oneStep() {
 	if err := simp.Game.Init(); err != nil {
+		if err == comm.ErrNewGame {
+			if *StatePath != "" {
+				os.Remove(*StatePath)
+			}
+			os.Exit(0)
+		}
 		panic(err)
 	}
 	for id, mi := range simp.Game.Men {

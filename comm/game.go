@@ -1,8 +1,7 @@
 package comm
 
-import "os"
-import "log"
 import "encoding/json"
+import "fmt"
 
 const StickCap = 5
 
@@ -113,6 +112,8 @@ type Game struct {
 
 // FIXME: add staleness to IIs
 
+var ErrNewGame = fmt.Errorf("New game")
+
 func (g *Game) Init() error {
 	if g.Islands == nil {
 		g.Islands = make(map[Pos]*IslandInfo)
@@ -128,8 +129,7 @@ func (g *Game) Init() error {
 		return err
 	}
 	if g.Wd.EdgeLength != 0 && wd.TurnsLeft > g.Wd.TurnsLeft { // if not first time around and more turns than previously
-		log.Printf("New game")
-		os.Exit(0)
+		return ErrNewGame
 	}
 	g.Wd = wd
 	ids, err := g.Srv.ListMen()
