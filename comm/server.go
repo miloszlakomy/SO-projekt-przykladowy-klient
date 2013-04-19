@@ -157,6 +157,9 @@ func (srv *Server) ListMen() ([]int, error) {
 		if err != nil {
 			return err
 		}
+		if count == 0 {
+			return nil
+		}
 		ss := strings.Split(strings.Trim(s, " "), " ")
 		if len(ss) != count {
 			return fmt.Errorf("Expected %d values, got %d: [%s]", count, len(ss), s)
