@@ -107,6 +107,7 @@ type Game struct {
 	Wd      WorldDesc
 	Islands IslandsType
 	Water   WaterType
+	Guarded WaterType
 	Men     MenType
 }
 
@@ -120,6 +121,9 @@ func (g *Game) Init() error {
 	}
 	if g.Water == nil {
 		g.Water = make(map[Pos]bool)
+	}
+	if g.Guarded == nil {
+		g.Guarded = make(map[Pos]bool)
 	}
 	// drop all men always: we want to eliminate dead ones
 	g.Men = make(map[int]ManInfo)
@@ -149,6 +153,11 @@ func (g *Game) Init() error {
 		for _, fi := range fis {
 			if !fi.Land {
 				g.Water[fi.Pos] = true
+			}
+			if fi.GuardCount > 0 {
+				g.Guarded[fi.Pos] = true
+			} else {
+				g.Guarded[fi.Pos] = false
 			}
 		}
 		iis, err := g.Srv.ListWood(id)

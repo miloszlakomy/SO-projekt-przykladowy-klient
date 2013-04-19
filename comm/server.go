@@ -3,6 +3,7 @@ package comm
 import "net/textproto"
 import "fmt"
 import "strings"
+import "sort"
 
 type Server struct {
 	*Conn
@@ -27,6 +28,11 @@ type WorldDesc struct {
 	BiggestLocations [5]Location
 }
 
+type locationsBySticks [5]Location
+func (l *locationsBySticks) Len() int { return 5 }
+func (l *locationsBySticks) Less(i, j int) bool { return (*l)[j].Sticks < (*l)[i].Sticks }
+func (l *locationsBySticks) Swap(i, j int) { (*l)[j], (*l)[i] = (*l)[i], (*l)[j] }
+
 const (
 	RoleNone    = "NONE"
 	RoleGuard   = "GUARD"
@@ -42,7 +48,7 @@ type FieldInfo struct {
 	Land bool
 	Pos  Pos
 	//	PeopleCount int
-	//	GuardCount int
+	GuardCount int
 	//	OwnedRafts int
 	//	AbandonedRafts int
 	//	OwnedRaftsSticks int
@@ -87,16 +93,15 @@ func (srv *Server) GetManInfo(id int) (ManInfo, []FieldInfo, error) {
 			var deltaX int
 			var deltaY int
 			var dummy int
-			if _, err := fmt.Sscanf(s, "%s %d %d %d %d %d %d %d", &fieldTy, &deltaX, &deltaY, &dummy, &dummy, &dummy, &dummy, &dummy); err != nil {
+			var fi FieldInfo
+			if _, err := fmt.Sscanf(s, "%s %d %d %d %d %d %d %d", &fieldTy, &deltaX, &deltaY, &dummy, &fi.GuardCount, &dummy, &dummy, &dummy); err != nil {
 				return err
 			}
-			fi := FieldInfo{
-				Land: fieldTy == "LAND",
-				Pos: Pos{
+			fi.Land = fieldTy == "LAND"
+			fi.Pos = Pos{
 					X: mi.Pos.X + deltaX,
 					Y: mi.Pos.Y + deltaY,
-				},
-			}
+				}
 			fis = append(fis, fi)
 		}
 		return nil
@@ -251,6 +256,7 @@ func (srv *Server) GetWorldDesc() (WorldDesc, error) {
 				return err
 			}
 		}
+		sort.Sort((*locationsBySticks)(&wd.BiggestLocations))
 		return nil
 	}, "TIME_TO_RESCUE")
 	return wd, err

@@ -17,16 +17,22 @@ func (p Pos) Distance(q Pos) int {
 }
 
 func (p Pos) Direction(q Pos) Pos {
-	if p.X < q.X {
-		return Pos{1, 0}
-	} else if p.X > q.X {
-		return Pos{-1, 0}
-	} else if p.Y < q.Y {
-		return Pos{0, 1}
-	} else if p.Y > q.Y {
-		return Pos{0, -1}
+	if abs(p.X - q.X) > abs(p.Y - q.Y) {
+		if p.X < q.X {
+			return Pos{1, 0}
+		} else if p.X > q.X {
+			return Pos{-1, 0}
+		}
 	} else {
-		return Pos{0, 0}
+		if p.Y < q.Y {
+			return Pos{0, 1}
+		} else if p.Y > q.Y {
+			return Pos{0, -1}
+		}
 	}
-	panic("unreached")
+	return Pos{0, 0}
+}
+
+func (p Pos) SimilarDir(q Pos) int {
+	return p.X*q.X + p.Y*q.Y
 }

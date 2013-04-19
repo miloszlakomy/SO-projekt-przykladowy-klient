@@ -124,6 +124,45 @@ func (simp *Simple) Loop() {
 	}
 }
 
+func (simp *Simple) bonfireDirection(id int) comm.Pos {
+	return simp.Game.Men[id].Pos.Direction(simp.Game.Wd.BiggestLocations[0].Pos)
+}
+
+func (simp *Simple) findNext(id int) comm.Pos {
+	var dest comm.Pos
+	mi := simp.Game.Men[id]
+	status := simp.Men[id] // exists, because oneStep()
+	bonfire := simp.Game.Wd.BiggestLocations[0]
+	if float64(bonfire.Sticks) > 0.6*float64(simp.Game.Wd.BonfireLimit) && status.LastIsland != bonfire.Pos {
+		return bonfire.Pos
+	}
+	if float64(bonfire.Sticks) > 0.1*float64(simp.Game.Wd.BonfireLimit) && status.LastIsland != bonfire.Pos && bonfire.Pos.Distance(mi.Pos) < 20 {
+		return bonfire.Pos
+	}
+	mult := float64(100000)
+	if bonfire.Sticks < simp.Game.Wd.BonfireLimit / 2 {
+		mult = 0
+	}
+	minDist := float64((mult + 1) * 1e12)
+	for _, fi := range simp.Game.Islands {
+		if fi.Pos == mi.Pos {
+			continue
+		}
+		if (fi.Sticks == fi.MySticks || simp.Game.Guarded[fi.Pos]) && bonfire.Sticks < simp.Game.Wd.BonfireLimit / 3 {
+			continue // not always!
+		}
+		if status.LastIsland == fi.Pos {
+			continue
+		}
+		dist := float64(mi.Pos.Distance(fi.Pos)) - mult * float64(mi.Pos.Direction(fi.Pos).SimilarDir(simp.bonfireDirection(id)))
+		if dist < minDist {
+			minDist = dist
+			dest = fi.Pos
+		}
+	}
+	return dest
+}
+
 func (simp *Simple) oneStep() {
 	if err := simp.Game.Init(); err != nil {
 		if err == comm.ErrNewGame {
@@ -141,20 +180,22 @@ func (simp *Simple) oneStep() {
 			simp.Men[id] = status
 		}
 		field := simp.Game.Islands[mi.Pos]
+		if field != nil {
+			status.CurrentDestination = comm.Pos{}
+		}
 		if field != nil && mi.StickCount > 0 {
 			if mi.Pos != status.LastIsland {
 				simp.Game.Srv.Drop(id)
 				status.LastIsland = comm.Pos{}
+				mi.StickCount = 0 // hack: we've just dropped and don't know that yet
 			}
 		}
-		if field != nil && field.Sticks > field.MySticks && mi.StickCount < 5 {
+		if field != nil && field.Sticks > field.MySticks && mi.StickCount < 5 && !simp.Game.Guarded[mi.Pos] {
 			simp.Game.Srv.Take(id)
 			status.LastIsland = mi.Pos
 			continue
 		}
-		minDist := 10000000
-		dir := comm.Pos{0, 0}
-		var dest *comm.IslandInfo
+/*		var dest *comm.IslandInfo
 		for _, fi := range simp.Game.Islands {
 			if fi.Pos == mi.Pos {
 				continue
@@ -170,14 +211,16 @@ func (simp *Simple) oneStep() {
 				minDist = mi.Pos.Distance(fi.Pos)
 				dest = fi
 			}
+		}*/
+		if status.CurrentDestination == (comm.Pos{}) {
+			status.CurrentDestination = simp.findNext(id)
 		}
-		if dir != (comm.Pos{0, 0}) {
-			log.Printf("Man %d going from %v to %v, in direction %v.\n", id, mi.Pos, dest.Pos, dir)
+		if status.CurrentDestination != (comm.Pos{0, 0}) {
+			dir := mi.Pos.Direction(status.CurrentDestination)
+			log.Printf("Man %d going from %v to %v, in direction %v.\n", id, mi.Pos, status.CurrentDestination, dir)
 			simp.Game.Srv.Move(id, dir.X, dir.Y)
-			status.CurrentDestination = dest.Pos
 		} else {
 			log.Printf("Man %d doesn't have anywhere to go.\n", id)
-			status.CurrentDestination = comm.Pos{}
 		}
 	}
 }

@@ -66,7 +66,16 @@ func (mv *MapView) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			} else if water {
 				s = "_"
 			} else {
-				s = "X"
+				ii := simp.Game.Islands[comm.Pos{x, y}]
+				v := ii.Sticks - ii.MySticks
+				v = (v + 9) / 10
+				if v < 10 {
+					s = string(rune('0' + v))
+				} else if v < 36 {
+					s = string(rune('A' + v - 10))
+				} else {
+					s = "*"
+				}
 			}
 			if id, ok := men[comm.Pos{x, y}]; ok {
 				s = fmt.Sprintf(`<a href="/men#%d">%s</a>`, id, s)
