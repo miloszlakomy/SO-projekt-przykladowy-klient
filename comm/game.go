@@ -137,6 +137,10 @@ func (g *Game) Init() error {
 	if err != nil {
 		return err
 	}
+	for _, loc := range wd.BiggestLocations {
+		g.Water[loc.Pos] = false
+		g.Islands[loc.Pos] = &IslandInfo{Pos: loc.Pos, Sticks: loc.Sticks, MySticks: 0}
+	}
 	for _, id := range ids {
 		mi, fis, err := g.Srv.GetManInfo(id)
 		if err != nil {
