@@ -120,9 +120,8 @@ func (g *Game) Init() error {
 	if g.Water == nil {
 		g.Water = make(map[Pos]bool)
 	}
-	if g.Men == nil {
-		g.Men = make(map[int]ManInfo)
-	}
+	// drop all men always: we want to eliminate dead ones
+	g.Men = make(map[int]ManInfo)
 	var err error
 	wd, err := g.Srv.GetWorldDesc()
 	if err != nil {
