@@ -9,6 +9,11 @@ type Server struct {
 	pipeline textproto.Pipeline
 }
 
+type Location struct {
+	Pos Pos
+	Sticks int
+}
+
 type WorldDesc struct {
 	EdgeLength   int
 	IslandCount  int
@@ -16,6 +21,10 @@ type WorldDesc struct {
 	BonfireCoeff int
 	MoveTime     int // in seconds
 	ResultCoeff  float64
+
+	TurnsLeft int
+	Fire bool
+	BiggestLocations [5]Location
 }
 
 const (
@@ -205,24 +214,41 @@ func (srv *Server) Move(id int, deltaX int, deltaY int) error {
 	return srv.cmd(noResponse, "MOVE %d %d %d", id, deltaX, deltaY)
 }
 
-func (s *Server) GetWorldDesc() (WorldDesc, error) {
+func (srv *Server) GetWorldDesc() (WorldDesc, error) {
 	wd := WorldDesc{}
-	id := s.pipeline.Next()
-	s.pipeline.StartRequest(id)
-	s.Printf("DESCRIBE_WORLD")
-	s.pipeline.EndRequest(id)
-
-	s.pipeline.StartResponse(id)
-	defer s.pipeline.EndResponse(id)
-	if err := s.ReadResult(); err != nil {
-		return wd, err
-	}
-	res, err := s.ReadRawLine()
+	err := srv.cmd(func() error {
+		res, err := srv.ReadRawLine()
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Sscanf(res, "%d %d %d %d %d %f", &wd.EdgeLength, &wd.IslandCount, &wd.BonfireLimit, &wd.BonfireCoeff, &wd.MoveTime, &wd.ResultCoeff); err != nil {
+			return err
+		}
+		return nil
+	},"DESCRIBE_WORLD")
 	if err != nil {
 		return wd, err
 	}
-	if _, err := fmt.Sscanf(res, "%d %d %d %d %d %f", &wd.EdgeLength, &wd.IslandCount, &wd.BonfireLimit, &wd.BonfireCoeff, &wd.MoveTime, &wd.ResultCoeff); err != nil {
-		return wd, err
-	}
-	return wd, nil
+	err = srv.cmd(func() error {
+		s, err := srv.ReadRawLine()
+		if err != nil {
+			return err
+		}
+		var fireString string
+		if _, err := fmt.Sscanf(s, "%s %d", &fireString, &wd.TurnsLeft); err != nil {
+			return err
+		}
+		wd.Fire = fireString == "BURNING"
+		for i := 0; i < 5; i++ {
+			s, err := srv.ReadRawLine()
+			if err != nil {
+				return err
+			}
+			if _, err := fmt.Sscanf(s, "%d %d %d", &wd.BiggestLocations[i].Pos.X, &wd.BiggestLocations[i].Pos.Y, &wd.BiggestLocations[i].Sticks); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, "TIME_TO_RESCUE")
+	return wd, err
 }

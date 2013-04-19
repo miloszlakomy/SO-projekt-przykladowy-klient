@@ -1,5 +1,8 @@
 package comm
 
+import "os"
+import "log"
+
 const StickCap = 5
 
 type Game struct {
@@ -25,10 +28,15 @@ func (g *Game) Init() error {
 		g.Men = make(map[int]ManInfo)
 	}
 	var err error
-	g.Wd, err = g.Srv.GetWorldDesc()
+	wd, err := g.Srv.GetWorldDesc()
 	if err != nil {
 		return err
 	}
+	if g.Wd.EdgeLength != 0 && wd.TurnsLeft > g.Wd.TurnsLeft { // if not first time around and more turns than previously
+		log.Printf("New game")
+		os.Exit(0)
+	}
+	g.Wd = wd
 	ids, err := g.Srv.ListMen()
 	if err != nil {
 		return err
@@ -44,8 +52,6 @@ func (g *Game) Init() error {
 				g.Water[fi.Pos] = true
 			}
 		}
-	}
-	for _, id := range ids {
 		iis, err := g.Srv.ListWood(id)
 		if err != nil {
 			if err1, ok := err.(RemoteError); ok && err1.Code == CodeNotLand {
@@ -56,8 +62,21 @@ func (g *Game) Init() error {
 		for _, ii := range iis {
 			tmp := ii
 			g.Islands[ii.Pos] = &tmp
+			g.Water[ii.Pos] = false
 		}
-		// add sure water based on prox to a man -- fixme
+		for x := mi.Pos.X - 8; x < mi.Pos.X + 8; x++ {
+			if x <= 0 || x > g.Wd.EdgeLength {
+				continue
+			}
+			for y := mi.Pos.Y - 8; y < mi.Pos.Y + 8; y ++ {
+				if y <= 0 || y > g.Wd.EdgeLength {
+					continue
+				}
+				if _, ok := g.Water[Pos{x, y}]; !ok {
+					g.Water[Pos{x, y}] = true
+				}
+			}
+		}
 	}
 	return nil
 }
