@@ -13,6 +13,7 @@ func main() {
 
 	http.Handle("/men", (*simple.MenView)(simp))
 	http.Handle("/map", (*simple.MapView)(simp))
+	http.Handle("/over", (*simple.OverviewView)(simp))
 	panic(http.ListenAndServe(*httpAddr, nil))
 }
 

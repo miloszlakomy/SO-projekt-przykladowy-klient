@@ -1,5 +1,6 @@
 package simple
 
+import "log"
 import "fmt"
 import "runtime"
 import "ognisko/comm"
@@ -28,9 +29,9 @@ func (mv *MenView) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	men := map[int]man{}
-	for id, status := range simp.men {
+	for id, status := range simp.Men {
 		var pmi *comm.ManInfo
-		if mi, ok := simp.game.Men[id]; ok {
+		if mi, ok := simp.Game.Men[id]; ok {
 			pmi = &mi
 		}
 		men[id] = man{Status: *status, Info: pmi}
@@ -48,17 +49,17 @@ func (mv *MapView) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	wr.WriteString(`<html><head><title>Map</title></head><body><table>`)
 	men := map[comm.Pos]int{}
-	for id, m := range simp.game.Men {
+	for id, m := range simp.Game.Men {
 		men[m.Pos] = id
 	}
-	for x := 1; x <= simp.game.Wd.EdgeLength; x++ {
+	for x := 1; x <= simp.Game.Wd.EdgeLength; x++ {
 		// not sure if needed:
 		simp.mu.Unlock()
 		runtime.Gosched()
 		simp.mu.Lock()
 		wr.WriteString(`<tr>`)
-		for y := 1; y <= simp.game.Wd.EdgeLength; y++ {
-			water, known := simp.game.Water[comm.Pos{x, y}]
+		for y := 1; y <= simp.Game.Wd.EdgeLength; y++ {
+			water, known := simp.Game.Water[comm.Pos{x, y}]
 			var s string
 			if !known {
 				s = "?"
@@ -76,6 +77,33 @@ func (mv *MapView) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	wr.WriteString(`</table></body></html>`)
 	wr.Flush()
+}
+
+type OverviewView Simple
+
+var overviewViewTempl = template.Must(template.New("menview").Parse(`
+<html><head><title>Overview</title></head><body>
+<table>
+<tr><td>Edge length</td><td>{{.Wd.EdgeLength}}</td></tr>
+<tr><td>Islands</td><td>{{.Wd.IslandCount}}</td></tr>
+<tr><td>Bonfire Limit</td><td>{{.Wd.BonfireLimit}}</td></tr>
+<tr><td>Bonfire Coefficient</td><td>{{.Wd.BonfireCoeff}}</td></tr>
+<tr><td>Move length [s]</td><td>{{.Wd.MoveTime}}</td></tr>
+<tr><td>Result coefficient</td><td>{{.Wd.ResultCoeff}}</td></tr>
+<tr><td>Turns left</td><td>{{.Wd.TurnsLeft}}</td></tr>
+<tr><td>Fire?</td><td>{{.Wd.Fire}}</td></tr>
+</table><p>Biggest locations:<ol>
+{{range $val := .Wd.BiggestLocations}}
+<li>{{$val.Sticks}} at ({{$val.Pos.X}}, {{$val.Pos.Y}})</li>
+{{end}}
+</ol></body></html>`))
+
+func (ov *OverviewView) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	simp := (*Simple)(ov)
+	simp.mu.Lock()
+	defer simp.mu.Unlock()
+
+	log.Printf("%v", overviewViewTempl.Execute(rw, simp.Game))
 }
 
 
