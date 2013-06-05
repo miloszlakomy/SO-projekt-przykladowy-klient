@@ -1,7 +1,7 @@
 package main
 
 import "flag"
-import "ognisko/simple"
+import "github.com/robryk/deadline2013-ognisko/simple"
 import "net/http"
 
 var httpAddr = flag.String("http", "127.0.0.1:5555", "")

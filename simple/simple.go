@@ -1,6 +1,6 @@
 package simple
 
-import "ognisko/comm"
+import "github.com/robryk/deadline2013-ognisko/comm"
 import "fmt"
 import "log"
 import "sync"

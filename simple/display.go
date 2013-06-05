@@ -2,7 +2,7 @@ package simple
 
 import "fmt"
 import "runtime"
-import "ognisko/comm"
+import "github.com/robryk/deadline2013-ognisko/comm"
 import "net/http"
 import "html/template"
 import "bufio"
