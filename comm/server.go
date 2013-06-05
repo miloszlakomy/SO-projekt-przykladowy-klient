@@ -26,6 +26,10 @@ type WorldDesc struct {
 	TurnsLeft int
 	Fire bool
 	BiggestLocations [5]Location
+
+	StickPoints int
+	MarkedSticks int
+	HeldSticks int
 }
 
 type locationsBySticks [5]Location
@@ -60,6 +64,14 @@ type ManInfo struct {
 	Role       string
 	StickCount int
 	BusyFor    int
+}
+
+func (mi ManInfo) Cap() int {
+	if mi.Role == RoleCaptain {
+		return 40
+	} else {
+		return 5
+	}
 }
 
 func (srv *Server) GetManInfo(id int) (ManInfo, []FieldInfo, error) {
@@ -210,12 +222,27 @@ func (srv *Server) ListWood(id int) ([]IslandInfo, error) {
 
 var noResponse = func() error { return nil }
 
+func (srv *Server) Ignite(id int) error {
+	return srv.cmd(noResponse, "IGNITION %d", id)
+}
 func (srv *Server) Take(id int) error {
 	return srv.cmd(noResponse, "TAKE %d", id)
 }
 
 func (srv *Server) Drop(id int) error {
 	return srv.cmd(noResponse, "GIVE %d", id)
+}
+
+func (srv *Server) Build(id int) error {
+	return srv.cmd(noResponse, "BUILD %d", id)
+}
+
+func (srv *Server) Guard(id int) error {
+	return srv.cmd(noResponse, "GUARD %d", id)
+}
+
+func (srv *Server) StopGuard(id int) error {
+	return srv.cmd(noResponse, "STOP_GUARDING %d", id)
 }
 
 func (srv *Server) Move(id int, deltaX int, deltaY int) error {
@@ -259,5 +286,18 @@ func (srv *Server) GetWorldDesc() (WorldDesc, error) {
 		sort.Sort((*locationsBySticks)(&wd.BiggestLocations))
 		return nil
 	}, "TIME_TO_RESCUE")
+	if err != nil {
+		return wd, err
+	}
+	err = srv.cmd(func() error {
+		s, err := srv.ReadRawLine()
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Sscanf(s, "%d %d %d", &wd.StickPoints, &wd.MarkedSticks, &wd.HeldSticks); err != nil {
+			return err
+		}
+		return nil
+	}, "MY_WOOD")
 	return wd, err
 }

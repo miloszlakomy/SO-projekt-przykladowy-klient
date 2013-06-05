@@ -1,6 +1,5 @@
 package simple
 
-import "log"
 import "fmt"
 import "runtime"
 import "ognisko/comm"
@@ -11,12 +10,12 @@ import "bufio"
 type MenView Simple
 
 var menViewTempl = template.Must(template.New("menview").Parse(`
-<html><head><title>Men</title></head><body>
-<table><tr><td>ID</td><td>Pos</td><td>Last island</td><td>Destination</td></tr>
+<table><tr><td>ID</td><td>Pos</td><td>Last island</td><td>Destination</td><td>Role</td><td>BusyFor</td><td>StickCount</td></tr>
 {{range $id, $val := .}}
-<tr id="{{$id}}"><td>{{$id}}</td><td>{{if $val.Info}}{{$val.Info.Pos}}{{else}}Dead{{end}}</td><td>{{$val.Status.LastIsland}}</td><td>{{$val.Status.CurrentDestination}}</td></tr>
+<tr id="{{$id}}"><td>{{$id}}</td><td>{{if $val.Info}}{{$val.Info.Pos}}{{else}}Dead{{end}}</td><td>{{$val.Status.LastIsland}}</td><td>{{$val.Status.CurrentDestination}}</td>
+{{if $val.Info}}<td>{{$val.Info.Role}}</td><td>{{$val.Info.BusyFor}}</td><td>{{$val.Info.StickCount}}</td>{{else}}<td/><td/><td/>{{end}}</tr>
 {{end}}
-</table></body></html>`))
+</table>`))
 
 func (mv *MenView) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	simp := (*Simple)(mv)
@@ -91,7 +90,6 @@ func (mv *MapView) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 type OverviewView Simple
 
 var overviewViewTempl = template.Must(template.New("menview").Parse(`
-<html><head><title>Overview</title></head><body>
 <table>
 <tr><td>Edge length</td><td>{{.Wd.EdgeLength}}</td></tr>
 <tr><td>Islands</td><td>{{.Wd.IslandCount}}</td></tr>
@@ -101,18 +99,36 @@ var overviewViewTempl = template.Must(template.New("menview").Parse(`
 <tr><td>Result coefficient</td><td>{{.Wd.ResultCoeff}}</td></tr>
 <tr><td>Turns left</td><td>{{.Wd.TurnsLeft}}</td></tr>
 <tr><td>Fire?</td><td>{{.Wd.Fire}}</td></tr>
+<tr><td>Stick points</td><td>{{.Wd.StickPoints}}</td></tr>
+<tr><td>Marked sticks</td><td>{{.Wd.MarkedSticks}}</td></tr>
+<tr><td>Held sticks</td><td>{{.Wd.HeldSticks}}</td></tr>
 </table><p>Biggest locations:<ol>
 {{range $val := .Wd.BiggestLocations}}
 <li>{{$val.Sticks}} at ({{$val.Pos.X}}, {{$val.Pos.Y}})</li>
 {{end}}
-</ol></body></html>`))
+</ol>`))
 
 func (ov *OverviewView) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	simp := (*Simple)(ov)
 	simp.mu.Lock()
 	defer simp.mu.Unlock()
 
-	log.Printf("%v", overviewViewTempl.Execute(rw, simp.Game))
+	type man struct {
+		Status ManStatus
+		Info *comm.ManInfo
+	}
+
+	men := map[int]man{}
+	for id, status := range simp.Men {
+		var pmi *comm.ManInfo
+		if mi, ok := simp.Game.Men[id]; ok {
+			pmi = &mi
+		}
+		men[id] = man{Status: *status, Info: pmi}
+	}
+	overviewViewTempl.Execute(rw, simp.Game)
+	menViewTempl.Execute(rw, men)
+
 }
 
 

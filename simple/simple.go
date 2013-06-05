@@ -124,29 +124,66 @@ func (simp *Simple) Loop() {
 	}
 }
 
+func (simp *Simple) myBonfire(id int) comm.Location {
+	mi := simp.Game.Men[id]
+	r := simp.Game.Wd.BiggestLocations[0]
+	countCloser := 0
+	for _, mmi := range simp.Game.Men {
+		if mmi.Pos.Distance(r.Pos) <= mi.Pos.Distance(r.Pos) {
+			countCloser++
+		}
+	}
+	if countCloser < 2 {
+		return r
+	}
+	for _, v := range simp.Game.Wd.BiggestLocations {
+		if v.Sticks >= simp.Game.Wd.BonfireLimit / 2 && v.Pos.Distance(mi.Pos) <= r.Pos.Distance(mi.Pos) {
+			r = v
+		}
+	}
+	return r
+}
+
 func (simp *Simple) bonfireDirection(id int) comm.Pos {
-	return simp.Game.Men[id].Pos.Direction(simp.Game.Wd.BiggestLocations[0].Pos)
+	return simp.Game.Men[id].Pos.Direction(simp.myBonfire(id).Pos)
+}
+
+func (simp *Simple) hasGuard() bool {
+	for _, mi := range simp.Game.Men {
+		if mi.Role == comm.RoleGuard {
+			return true
+		}
+	}
+	return false
 }
 
 func (simp *Simple) findNext(id int) comm.Pos {
 	var dest comm.Pos
 	mi := simp.Game.Men[id]
 	status := simp.Men[id] // exists, because oneStep()
-	bonfire := simp.Game.Wd.BiggestLocations[0]
-	if float64(bonfire.Sticks) > 0.6*float64(simp.Game.Wd.BonfireLimit) && status.LastIsland != bonfire.Pos {
+	//bonfire := simp.Game.Wd.BiggestLocations[0]
+	bonfire := simp.myBonfire(id)
+	if float64(bonfire.Sticks + bonfire.Pos.Distance(mi.Pos)) > 0.5*float64(simp.Game.Wd.BonfireLimit) && status.LastIsland != bonfire.Pos && mi.Pos != bonfire.Pos {
 		return bonfire.Pos
 	}
-	if float64(bonfire.Sticks) > 0.1*float64(simp.Game.Wd.BonfireLimit) && status.LastIsland != bonfire.Pos && bonfire.Pos.Distance(mi.Pos) < 20 {
-		return bonfire.Pos
-	}
-	mult := float64(100000)
-	if bonfire.Sticks < simp.Game.Wd.BonfireLimit / 2 {
-		mult = 0
-	}
+	//if float64(bonfire.Sticks) > 0.1*float64(simp.Game.Wd.BonfireLimit) && status.LastIsland != bonfire.Pos && bonfire.Pos.Distance(mi.Pos) < 20 {
+	//	return bonfire.Pos
+	//}
+	mult := float64(0.8)
+	//if bonfire.Sticks < simp.Game.Wd.BonfireLimit / 2 {
+	//	mult = 0
+	//}
 	minDist := float64((mult + 1) * 1e12)
 	for _, fi := range simp.Game.Islands {
 		if fi.Pos == mi.Pos {
 			continue
+		}
+		// if i have nothing, i need to go somewhere i can get something
+		if (fi.Sticks == 0 || simp.Game.Guarded[fi.Pos]) && mi.StickCount == 0 {
+			continue
+		}
+		if mi.Role != comm.RoleCaptain && fi.Sticks + mi.StickCount >= 100 && !simp.Game.Guarded[fi.Pos] && mi.Pos.Distance(fi.Pos) < 30 {
+			return fi.Pos
 		}
 		if (fi.Sticks == fi.MySticks || simp.Game.Guarded[fi.Pos]) && bonfire.Sticks < simp.Game.Wd.BonfireLimit / 3 {
 			continue // not always!
@@ -154,7 +191,8 @@ func (simp *Simple) findNext(id int) comm.Pos {
 		if status.LastIsland == fi.Pos {
 			continue
 		}
-		dist := float64(mi.Pos.Distance(fi.Pos)) - mult * float64(mi.Pos.Direction(fi.Pos).SimilarDir(simp.bonfireDirection(id)))
+		penalty := mult * float64(fi.Pos.Distance(bonfire.Pos) - mi.Pos.Distance(bonfire.Pos))
+		dist := float64(mi.Pos.Distance(fi.Pos)) + penalty
 		if dist < minDist {
 			minDist = dist
 			dest = fi.Pos
@@ -179,6 +217,9 @@ func (simp *Simple) oneStep() {
 			status = new(ManStatus)
 			simp.Men[id] = status
 		}
+		if mi.Role == comm.RoleGuard && mi.Pos != simp.Game.Wd.BiggestLocations[0].Pos { // guarding will be funny with multiple bonfires
+			simp.Game.Srv.StopGuard(id)
+		}
 		field := simp.Game.Islands[mi.Pos]
 		if field != nil {
 			status.CurrentDestination = comm.Pos{}
@@ -187,11 +228,29 @@ func (simp *Simple) oneStep() {
 			if mi.Pos != status.LastIsland {
 				simp.Game.Srv.Drop(id)
 				status.LastIsland = comm.Pos{}
+				field.Sticks += mi.StickCount // hack
 				mi.StickCount = 0 // hack: we've just dropped and don't know that yet
 			}
 		}
-		if field != nil && field.Sticks > field.MySticks && mi.StickCount < 5 && !simp.Game.Guarded[mi.Pos] {
-			simp.Game.Srv.Take(id)
+		if field != nil && field.Sticks >= simp.Game.Wd.BonfireLimit {
+			simp.Game.Srv.Ignite(id)
+			continue
+		}
+		if field != nil && field.Sticks >= 100 && !simp.Game.Guarded[mi.Pos] && mi.Role != comm.RoleCaptain {
+			simp.Game.Srv.Build(id)
+			continue
+		}
+		if mi.Pos == simp.Game.Wd.BiggestLocations[0].Pos && !simp.hasGuard() && mi.Role != comm.RoleCaptain && simp.Game.Wd.BiggestLocations[0].Sticks > 200 {
+			simp.Game.Srv.Guard(id)
+			continue
+		}
+		if field != nil && field.Sticks > field.MySticks && mi.StickCount < mi.Cap() && !simp.Game.Guarded[mi.Pos] {
+			if float64(field.Sticks) > 0.8 * float64(simp.Game.Wd.BonfireLimit) && float64(field.MySticks) > 0.4 * float64(field.Sticks) {
+				// don't take anything away
+			} else {
+				simp.Game.Srv.Take(id)
+			}
+			// set lastisland anyway to advance
 			status.LastIsland = mi.Pos
 			continue
 		}
